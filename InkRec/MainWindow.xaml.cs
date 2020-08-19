@@ -18,6 +18,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Microsoft.Toolkit.Win32.UI.Controls.Interop.WinRT;
 
 namespace InkRec
 {
@@ -31,57 +32,24 @@ namespace InkRec
             InitializeComponent();
         }
 
-        private async void Button_Click(object sender, RoutedEventArgs e)
-        {
-            var openDlg = new Microsoft.Win32.OpenFileDialog();
-
-            openDlg.Filter = "JPEG Image(*.jpg)|*.jpg";
-            bool? result = openDlg.ShowDialog(this);
-
-            if (!(bool)result)
-            {
-                return;
-            }
-
-            // Display the image file.
-            string filePath = openDlg.FileName;
-
-            Uri fileUri = new Uri(filePath);
-            BitmapImage bitmapSource = new BitmapImage();
-
-            bitmapSource.BeginInit();
-            bitmapSource.CacheOption = BitmapCacheOption.None;
-            bitmapSource.UriSource = fileUri;
-            bitmapSource.EndInit();
-
-            img.Source = bitmapSource;
-
-           var response = await InkRec(filePath);
-
-            this.txt.Text = response;
-        }
-
         /// <summary>
         /// 开始识别笔迹
         /// </summary>
         /// <param name="imgPath"></param>
         /// <returns></returns>
-        private async Task<string> InkRec(string imgPath)
+        private async Task<string> InkRec(InkData data)
         {
            string inkRecognitionUrl = "/inkrecognizer/v1.0-preview/recognize";
-            // Replace the dataPath string with a path to the JSON formatted ink stroke data.
-            // Optionally, use the example-ink-strokes.json file of this sample. Add to your bin\Debug\netcoreapp3.0 project folder.
-            string dataPath = @"PATH_TO_INK_STROKE_DATA";
             string endPoint = "https://inkrec-01.cognitiveservices.azure.com/";
             string subscriptionKey = "e51e7d9ff5ea4cf3bc5b24f2bc078c7e";
+
             using (HttpClient client = new HttpClient { BaseAddress = new Uri(endPoint) })
             {
                 System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 client.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", subscriptionKey);
-
-                var imgData = ReaderImgJsonString(imgPath);
-                var content = new StringContent(imgData, Encoding.UTF8, "application/json");
+                var jsonData = JsonConvert.SerializeObject(data);
+                var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
                 var res = await client.PutAsync(inkRecognitionUrl, content);
                 if (res.IsSuccessStatusCode)
                 {
@@ -98,21 +66,76 @@ namespace InkRec
             }
         }
 
-        /// <summary>
-        /// 把图片数据转成json数据
-        /// </summary>
-        /// <param name="fileLocation"></param>
-        /// <returns></returns>
-        public string ReaderImgJsonString(string fileLocation)
+        private List<System.Windows.Point> ConvertPixelsToMillimeters(IReadOnlyList<InkPoint> pointsInPixels)
         {
-            var jsonObj = new JObject();
+            float dpiX = 96.0f;
+            float dpiY = 96.0f;
+            var transformedInkPoints = new List<System.Windows.Point>();
+            const float inchToMillimeterFactor = 25.4f;
 
-            using (StreamReader file = File.OpenText(fileLocation))
-            using (JsonTextReader reader = new JsonTextReader(file))
+
+            foreach (var point in pointsInPixels)
             {
-                jsonObj = (JObject)JToken.ReadFrom(reader);
+                var transformedX = (point.Position.X / dpiX) * inchToMillimeterFactor;
+                var transformedY = (point.Position.Y / dpiY) * inchToMillimeterFactor;
+
+                transformedInkPoints.Add(new System.Windows.Point(transformedX, transformedY));
             }
-            return jsonObj.ToString(Newtonsoft.Json.Formatting.None);
+
+            return transformedInkPoints;
         }
+
+
+        private async void Button_InkRec(object sender, RoutedEventArgs e)
+        {
+            var inkData = GetInkData();
+            var response = await InkRec(inkData);
+
+            this.txt.Text = response;
+        }
+
+        private InkData GetInkData()
+        {
+            var data = new InkData();
+            data.language = "zh-CN";
+            data.strokes = new List<InkStroke>();
+
+            int id = 0;
+            foreach (var stroke in this.inkCanvas.InkPresenter.StrokeContainer.Strokes)
+            {
+                var points = stroke.get;
+
+                var inkStorke = new InkStroke();
+                inkStorke.id = id++;
+
+                var sb = new StringBuilder();
+                foreach (var point in points)
+                {
+                    sb.Append(point.X);
+                    sb.Append(",");
+                    sb.Append(point.Y);
+                    sb.Append(",");
+                }
+                inkStorke.points = sb.ToString().TrimEnd(',');
+
+                data.strokes.Add(inkStorke);
+            }
+
+            return data;
+        }
+    }
+
+    public class InkStroke
+    {
+        public int id { get; set; }
+
+        public string points { get; set; } 
+    }
+
+    public class InkData
+    {
+        public string language { get; set; }
+
+        public List<InkStroke> strokes { get; set; }
     }
 }

@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:InkRec"
+           xmlns:controls="clr-namespace:Microsoft.Toolkit.Wpf.UI.Controls;assembly=Microsoft.Toolkit.Wpf.UI.Controls"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
@@ -14,10 +15,9 @@
 
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="2" Orientation="Horizontal">
-            <Button Margin="10,0" Click="Button_Click">选择文件</Button>
-            <Button>开始识别</Button>
+            <Button Click="Button_InkRec">开始识别</Button>
         </StackPanel>
         <TextBlock Grid.Row="1" x:Name="txt"></TextBlock>
-        <Image Grid.Row="0" x:Name="img"></Image>
+        <controls:InkCanvas x:Name="inkCanvas"></controls:InkCanvas>
     </Grid>
 </Window>
